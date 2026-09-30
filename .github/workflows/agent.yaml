@@ -1,0 +1,104 @@
+name: Run agent mode
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-console-app:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Delete all folders in input and output
+        run: |
+          for dir in input output; do
+            if [ -d "$dir" ]; then
+              find "$dir" -mindepth 1 -type d -exec rm -rf {} +
+            fi
+          done
+
+      - name: Echo content of input/repos.txt
+        run: |
+          if [ -f "input/repos.txt" ]; then
+            echo "----- input/repos.txt -----"
+            cat input/repos.txt
+          else
+            echo "input/repos.txt file not found"
+          fi
+
+      - name: Clone repositories from list
+        run: |
+          if [ -f "input/repos.txt" ]; then
+            while IFS= read -r repo || [ -n "$repo" ]; do
+              if [ -n "$repo" ]; then
+                echo "Cloning $repo (main branch, shallow)"
+                # Try to clone main, fallback to master if main does not exist
+                git clone --branch main --depth 1 "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/$repo.git" "input/$(basename $repo)" \
+                  || git clone --branch master --depth 1 "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/$repo.git" "input/$(basename $repo)"
+              fi
+            done < input/repos.txt
+          else
+            echo "input/repos.txt file not found, skipping repository cloning"
+          fi
+
+      - name: Show input folder file tree [DEBUG]
+        run: |
+          echo "File tree of input folder after cloning:"
+          ls -R input
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build agent
+        run: pnpm run build:agent
+
+      - name: Run agent
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT }}
+        run: node src/agent-service/dist/index.js analyze --workspace ./input -m 15
+
+      - name: Echo all files contents in output folder
+        run: |
+          if [ -d "output" ]; then
+            find output -type f -exec sh -c 'echo "----- {} -----"; cat "{}"; echo' \;
+          else
+            echo "output folder not found"
+          fi
+
+      # Step 2: Copy `.md` files from the `output` folder to the `wiki` folder
+      - name: Copy .md files to wiki folder
+        run: |
+          mkdir -p wiki # Ensure wiki directory exists
+          if [ -d "output" ]; then
+            find output -type f -name "*.md" -exec cp {} wiki/ \;
+          else
+            echo "output folder not found, nothing to copy"
+          fi
+
+      # # Step 3: Commit and Push Changes to the Wiki Folder
+      # - name: Commit and Push .md Files to Wiki
+      #   run: |
+      #     if [ -d "wiki" ] && [ "$(ls -A wiki)" ]; then
+      #       git config --local user.email "actions@github.com"
+      #       git config --local user.name "GitHub Actions"
+
+      #       # Create a commit with the copied files
+      #       git add wiki/*.md
+      #       git commit -m "Update wiki files with output .md files [ci skip]" || echo "Nothing to commit"
+      #       git push
+      #     else
+      #       echo "No markdown files to commit"
+      #     fi

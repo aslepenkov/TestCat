@@ -1,0 +1,11 @@
+{
+  "name": "testcatai-frontend-service",
+  "version": "1.0.0",
+  "description": "TestCatAI Frontend Service",
+  "dependencies": {
+    "http-server": "^14.1.1"
+  },
+  "scripts": {
+    "start": "http-server -p 80"
+  }
+}

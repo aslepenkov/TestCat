@@ -1,0 +1,662 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TestCatAI - Code Analysis Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <style>
+      body {
+        margin: 0;
+        font-family: "Inter", sans-serif;
+        background-color: #f5f7fa;
+        color: #1f2d3d;
+        display: flex;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      .markdown-output,
+      .markdown-output * {
+        all: revert;
+      }
+
+      .chat-messages {
+        max-height: 300px;
+        overflow-y: auto;
+      }
+
+      .message {
+        margin-bottom: 12px;
+        padding: 8px 12px;
+        border-radius: 12px;
+        max-width: 80%;
+      }
+
+      .message.user {
+        background-color: #3b82f6;
+        color: white;
+        margin-left: auto;
+      }
+
+      .message.assistant {
+        background-color: #f1f5f9;
+        color: #1f2937;
+      }
+
+      .log-entry {
+        padding: 2px 0;
+        font-family: "Courier New", monospace;
+      }
+
+      .log-entry.error {
+        color: #ef4444;
+      }
+
+      .log-entry.success {
+        color: #10b981;
+      }
+
+      .spinner {
+        border: 2px solid #f3f3f3;
+        border-top: 2px solid #3b82f6;
+        border-radius: 50%;
+        width: 16px;
+        height: 16px;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .status-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 8px;
+      }
+
+      .status-connected {
+        background-color: #10b981;
+      }
+
+      .status-disconnected {
+        background-color: #ef4444;
+      }
+
+      .status-analyzing {
+        background-color: #f59e0b;
+        animation: pulse 1s infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+    </style>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { inter: ["Inter", "sans-serif"] },
+            colors: {
+              primary: "#3b82f6",
+              lightGray: "#f5f7fa",
+              card: "#fff",
+              border: "#e0e6ed",
+              muted: "#6b7280",
+              accent: "#10b981",
+              warning: "#ef4444",
+            },
+            borderRadius: { xl: "20px", "2xl": "24px" },
+            boxShadow: {
+              card: "0 2px 6px rgba(0,0,0,0.04)",
+              inset: "inset 0 1px 2px rgba(0,0,0,0.05)",
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+
+  <body class="bg-lightGray h-screen overflow-hidden">
+    <div class="flex h-full w-full">
+      <!-- Sidebar -->
+      <aside
+        class="w-[280px] bg-white border-r border-border flex flex-col p-6 shadow-sm"
+      >
+        <!-- Logo -->
+        <div class="mb-8 flex justify-center">
+          <img src="logo.jpg" alt="TestCatAI Logo" class="h-[80px]" />
+        </div>
+
+        <!-- Connection Status -->
+        <div class="mb-6 p-3 bg-gray-50 rounded-xl">
+          <div class="flex items-center text-sm">
+            <span
+              id="connection-status"
+              class="status-indicator status-disconnected"
+            ></span>
+            <span id="connection-text">Connecting...</span>
+          </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="mb-6">
+          <h3 class="text-sm font-semibold mb-3 text-gray-700">
+            Quick Actions
+          </h3>
+          <button
+            id="run-analysis-btn"
+            class="w-full bg-primary text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span id="analysis-btn-text">🚀 Run Analysis</span>
+            <div
+              id="analysis-spinner"
+              class="spinner ml-2 hidden inline-block"
+            ></div>
+          </button>
+        </div>
+
+        <!-- Chat Interface -->
+        <div class="flex-1 flex flex-col min-h-0">
+          <h3 class="text-sm font-semibold mb-3 text-gray-700">
+            Chat Assistant
+          </h3>
+
+          <!-- Chat Messages -->
+          <div
+            id="chat-messages"
+            class="chat-messages flex-1 mb-4 p-3 bg-gray-50 rounded-xl overflow-y-auto"
+          >
+            <div class="message assistant">
+              👋 Hello! I'm your TestCatAI assistant. Ask me anything about your
+              code analysis.
+            </div>
+          </div>
+
+          <!-- Chat Input -->
+          <div class="flex gap-2">
+            <input
+              id="chat-input"
+              type="text"
+              placeholder="Ask about your code..."
+              class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <button
+              id="send-chat-btn"
+              class="bg-primary text-white px-3 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+            >
+              📤
+            </button>
+          </div>
+        </div>
+
+        <!-- Output Files -->
+        <div class="mt-6">
+          <h3 class="text-sm font-semibold mb-3 text-gray-700">
+            Recent Results
+          </h3>
+          <div id="output-files" class="space-y-2 max-h-32 overflow-y-auto">
+            <div class="text-xs text-gray-500">No analysis results yet</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Content Area -->
+      <main class="flex-1 flex flex-col" style="min-height: 0">
+        <!-- Header -->
+        <header
+          class="bg-white border-b border-border p-4 flex items-center justify-between"
+        >
+          <div>
+            <h1 class="text-xl font-bold">Code Analysis Dashboard</h1>
+            <p class="text-sm text-muted">Workspace: /app/input</p>
+          </div>
+          <div class="flex items-center gap-4">
+            <div id="analysis-status" class="text-sm text-muted">Ready</div>
+            <button id="refresh-btn" class="text-gray-500 hover:text-gray-700">
+              🔄
+            </button>
+          </div>
+        </header>
+
+        <!-- Content Panels -->
+        <div class="flex-1 p-4 flex flex-col gap-4" style="min-height: 0">
+          <!-- Analysis Results -->
+          <section
+            class="bg-white rounded-2xl shadow-card p-6 flex flex-col flex-1"
+            style="min-height: 0"
+          >
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-semibold">Analysis Results</h2>
+              <select
+                id="result-selector"
+                class="text-sm border border-gray-300 rounded-lg px-3 py-1"
+              >
+                <option value="">Select a result file...</option>
+              </select>
+            </div>
+
+            <div
+              id="analysis-content"
+              class="flex-1 overflow-y-auto"
+              style="min-height: 0"
+            >
+              <div
+                class="h-full flex items-center justify-center text-gray-500"
+              >
+                <div class="text-center">
+                  <div class="text-4xl mb-4">📊</div>
+                  <p>No analysis results to display</p>
+                  <p class="text-sm mt-2">
+                    Run an analysis to see results here
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Live Logs -->
+          <section
+            class="bg-white rounded-2xl shadow-card p-6 flex flex-col"
+            style="height: 300px; min-height: 300px"
+          >
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-semibold">Live Analysis Logs</h3>
+              <div class="flex items-center gap-2">
+                <span id="log-status" class="text-sm text-muted">Idle</span>
+                <button
+                  id="clear-logs-btn"
+                  class="text-xs bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            <div
+              id="live-logs"
+              class="flex-1 overflow-y-auto bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm"
+            >
+              <div class="log-entry">🎯 TestCatAI ready for analysis...</div>
+              <div class="log-entry">
+                💡 Tip: Click "Run Analysis" to start or ask questions in the
+                chat
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <!-- Analysis Configuration Modal -->
+    <div
+      id="config-modal"
+      class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+    >
+      <div class="bg-white rounded-2xl p-6 w-96 max-w-90vw">
+        <h3 class="text-lg font-semibold mb-4">Analysis Configuration</h3>
+
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium mb-2">Custom Prompt</label>
+            <textarea
+              id="custom-prompt"
+              rows="3"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              placeholder="Enter your analysis prompt..."
+            ></textarea>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium mb-2">Max Iterations</label>
+            <input
+              id="max-iterations"
+              type="number"
+              value="10"
+              min="1"
+              max="50"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+
+          <div class="flex items-center">
+            <input id="debug-mode" type="checkbox" class="mr-2" />
+            <label class="text-sm">Enable debug mode</label>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-3 mt-6">
+          <button
+            id="cancel-config-btn"
+            class="px-4 py-2 text-gray-600 hover:text-gray-800"
+          >
+            Cancel
+          </button>
+          <button
+            id="start-analysis-btn"
+            class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-blue-600"
+          >
+            Start Analysis
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Output is LLM-generated from untrusted repos: never inject it as raw HTML
+      function escapeHtml(text) {
+        const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+        return String(text).replace(/[&<>"']/g, (c) => map[c]);
+      }
+
+      class TestCatAIApp {
+        constructor() {
+          this.socket = null;
+          this.isAnalyzing = false;
+          this.initializeApp();
+        }
+
+        initializeApp() {
+          this.setupEventListeners();
+          this.connectWebSocket();
+          this.loadOutputFiles();
+        }
+
+        setupEventListeners() {
+          // Analysis button
+          document
+            .getElementById("run-analysis-btn")
+            .addEventListener("click", () => {
+              document
+                .getElementById("config-modal")
+                .classList.remove("hidden");
+            });
+
+          // Modal buttons
+          document
+            .getElementById("cancel-config-btn")
+            .addEventListener("click", () => {
+              document.getElementById("config-modal").classList.add("hidden");
+            });
+
+          document
+            .getElementById("start-analysis-btn")
+            .addEventListener("click", () => {
+              this.startAnalysis();
+            });
+
+          // Chat functionality
+          document
+            .getElementById("send-chat-btn")
+            .addEventListener("click", () => {
+              this.sendChatMessage();
+            });
+
+          document
+            .getElementById("chat-input")
+            .addEventListener("keypress", (e) => {
+              if (e.key === "Enter") {
+                this.sendChatMessage();
+              }
+            });
+
+          // Result selector
+          document
+            .getElementById("result-selector")
+            .addEventListener("change", (e) => {
+              this.loadResultFile(e.target.value);
+            });
+
+          // Refresh button
+          document
+            .getElementById("refresh-btn")
+            .addEventListener("click", () => {
+              this.loadOutputFiles();
+            });
+
+          // Clear logs
+          document
+            .getElementById("clear-logs-btn")
+            .addEventListener("click", () => {
+              document.getElementById("live-logs").innerHTML =
+                '<div class="log-entry">🎯 Logs cleared</div>';
+            });
+        }
+
+        get backendUrl() {
+          return `http://${window.location.hostname}:3000`;
+        }
+
+        connectWebSocket() {
+          const backendUrl = this.backendUrl;
+
+          this.socket = io(backendUrl, {
+            path: "/socket.io/",
+            transports: ["websocket", "polling"],
+          });
+
+          this.socket.on("connect", () => {
+            this.updateConnectionStatus(true);
+            this.addLogEntry("🔌 Connected to TestCatAI backend", "success");
+          });
+
+          this.socket.on("disconnect", () => {
+            this.updateConnectionStatus(false);
+            this.addLogEntry("❌ Disconnected from backend", "error");
+          });
+
+          this.socket.on("analysis-started", (data) => {
+            this.addLogEntry("🚀 Analysis started", "success");
+            this.updateAnalysisStatus("Running...");
+          });
+
+          this.socket.on("analysis-progress", (data) => {
+            this.addLogEntry(data.message, data.type);
+          });
+
+          this.socket.on("analysis-completed", (data) => {
+            this.addLogEntry("✅ Analysis completed successfully", "success");
+            this.updateAnalysisStatus("Completed");
+            this.isAnalyzing = false;
+            this.updateAnalysisButton();
+            this.loadOutputFiles();
+          });
+
+          this.socket.on("analysis-error", (data) => {
+            this.addLogEntry(`❌ Analysis failed: ${data.message}`, "error");
+            this.updateAnalysisStatus("Failed");
+            this.isAnalyzing = false;
+            this.updateAnalysisButton();
+          });
+
+          this.socket.on("chat-response", (data) => {
+            this.addChatMessage(data.message, "assistant");
+          });
+        }
+
+        updateConnectionStatus(connected) {
+          const statusEl = document.getElementById("connection-status");
+          const textEl = document.getElementById("connection-text");
+
+          if (connected) {
+            statusEl.className = "status-indicator status-connected";
+            textEl.textContent = "Connected";
+          } else {
+            statusEl.className = "status-indicator status-disconnected";
+            textEl.textContent = "Disconnected";
+          }
+        }
+
+        startAnalysis() {
+          const prompt = document.getElementById("custom-prompt").value;
+          const maxIterations = parseInt(
+            document.getElementById("max-iterations").value,
+          );
+          const debug = document.getElementById("debug-mode").checked;
+
+          this.isAnalyzing = true;
+          this.updateAnalysisButton();
+          this.updateAnalysisStatus("Starting...");
+
+          this.socket.emit("start-analysis", {
+            prompt: prompt || undefined,
+            maxIterations,
+            debug,
+          });
+
+          document.getElementById("config-modal").classList.add("hidden");
+          this.addLogEntry("🎯 Analysis request sent to backend", "success");
+        }
+
+        updateAnalysisButton() {
+          const btn = document.getElementById("run-analysis-btn");
+          const text = document.getElementById("analysis-btn-text");
+          const spinner = document.getElementById("analysis-spinner");
+
+          if (this.isAnalyzing) {
+            btn.disabled = true;
+            text.textContent = "⏳ Analyzing...";
+            spinner.classList.remove("hidden");
+          } else {
+            btn.disabled = false;
+            text.textContent = "🚀 Run Analysis";
+            spinner.classList.add("hidden");
+          }
+        }
+
+        updateAnalysisStatus(status) {
+          document.getElementById("analysis-status").textContent = status;
+          document.getElementById("log-status").textContent = status;
+        }
+
+        addLogEntry(message, type = "info") {
+          const logsEl = document.getElementById("live-logs");
+          const entry = document.createElement("div");
+          entry.className = `log-entry ${type}`;
+          entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+
+          logsEl.appendChild(entry);
+          logsEl.scrollTop = logsEl.scrollHeight;
+        }
+
+        sendChatMessage() {
+          const input = document.getElementById("chat-input");
+          const message = input.value.trim();
+
+          if (!message) return;
+
+          this.addChatMessage(message, "user");
+          this.socket.emit("chat-message", { message });
+
+          input.value = "";
+        }
+
+        addChatMessage(message, sender) {
+          const messagesEl = document.getElementById("chat-messages");
+          const messageDiv = document.createElement("div");
+          messageDiv.className = `message ${sender}`;
+          messageDiv.textContent = message;
+
+          messagesEl.appendChild(messageDiv);
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        async loadOutputFiles() {
+          try {
+            const response = await fetch(`${this.backendUrl}/output`);
+            const data = await response.json();
+
+            this.updateOutputFilesList(data.files || []);
+            this.updateResultSelector(data.files || []);
+          } catch (error) {
+            console.error("Failed to load output files:", error);
+            this.addLogEntry("⚠️ Failed to load output files", "error");
+          }
+        }
+
+        updateOutputFilesList(files) {
+          const container = document.getElementById("output-files");
+
+          if (files.length === 0) {
+            container.innerHTML =
+              '<div class="text-xs text-gray-500">No analysis results yet</div>';
+            return;
+          }
+
+          container.innerHTML = files
+            .slice(0, 5)
+            .map(
+              (file) => `
+            <div class="text-xs p-2 bg-gray-50 rounded cursor-pointer hover:bg-gray-100" data-file="${escapeHtml(file.name)}">
+              📄 ${escapeHtml(file.name)}
+              <div class="text-gray-400">${new Date(file.modified).toLocaleString()}</div>
+            </div>
+          `,
+            )
+            .join("");
+
+          container.querySelectorAll("[data-file]").forEach((el) =>
+            el.addEventListener("click", () =>
+              this.loadResultFile(el.dataset.file),
+            ),
+          );
+        }
+
+        updateResultSelector(files) {
+          const selector = document.getElementById("result-selector");
+          selector.innerHTML =
+            '<option value="">Select a result file...</option>' +
+            files
+              .map(
+                (file) => `<option value="${escapeHtml(file.name)}">${escapeHtml(file.name)}</option>`,
+              )
+              .join("");
+        }
+
+        async loadResultFile(filename) {
+          if (!filename) return;
+
+          try {
+            const response = await fetch(`${this.backendUrl}/output/${encodeURIComponent(filename)}`);
+            const data = await response.json();
+
+            const contentEl = document.getElementById("analysis-content");
+
+            if (
+              data.contentType === "text/markdown" ||
+              filename.endsWith(".md")
+            ) {
+              contentEl.innerHTML = `<div class="markdown-output prose max-w-none">${DOMPurify.sanitize(marked.parse(data.content))}</div>`;
+            } else {
+              contentEl.innerHTML = `<pre class="whitespace-pre-wrap text-sm">${escapeHtml(data.content)}</pre>`;
+            }
+          } catch (error) {
+            console.error("Failed to load result file:", error);
+            this.addLogEntry(`⚠️ Failed to load ${filename}`, "error");
+          }
+        }
+      }
+
+      // Initialize the application
+      const app = new TestCatAIApp();
+    </script>
+  </body>
+</html>

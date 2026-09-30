@@ -1,0 +1,50 @@
+{
+  "name": "testcatai-code-analyzer",
+  "version": "1.0.0",
+  "description": "Prompt-driven code analysis tool: CLI agent, web backend and UI on top of the GitHub Copilot API",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm run build:backend && pnpm run build:agent",
+    "build:backend": "cd src/backend-service && pnpm install && pnpm run build",
+    "build:agent": "cd src/agent-service && pnpm install && pnpm run build",
+    "install:all": "pnpm run install:backend && pnpm run install:agent",
+    "install:backend": "cd src/backend-service && pnpm install",
+    "install:agent": "cd src/agent-service && pnpm install",
+    "start:backend": "cd src/backend-service && pnpm start",
+    "start:frontend": "cd src/frontend-service && pnpm start",
+    "start:agent": "cd src/agent-service && pnpm start",
+    "start:cli": "cd src/agent-service && pnpm run start:cli",
+    "clean": "rm -rf dist && rm -rf src/*/dist && rm -rf src/*/node_modules",
+    "test": "vitest run --reporter=verbose",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "keywords": [
+    "ai",
+    "copilot",
+    "code-analysis",
+    "documentation",
+    "llm-agent",
+    "cli"
+  ],
+  "author": "Alex Slepenkov",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/supertest": "^6.0.3",
+    "@vitest/coverage-v8": "^3.2.4",
+    "@vitest/ui": "^3.2.4",
+    "execa": "^9.6.0",
+    "rimraf": "^5.0.0",
+    "socket.io-client": "^4.8.4",
+    "supertest": "^7.1.4",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@12.8.1"
+}

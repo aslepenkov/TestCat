@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    // Transpile TypeScript to modern ECMAScript 2022 JavaScript
+    "target": "ES2022",
+    // Use native ES module system for output (import/export)
+    "module": "ES2022",
+    // Resolve modules like Node.js does (Node-style resolution)
+    "moduleResolution": "node",
+    // Output directory for compiled .js files
+    "outDir": "dist",
+    // The root directory of TypeScript source files
+    "rootDir": ".",
+    // Enable all strict type-checking options (best practice for safety)
+    "strict": true,
+    // Allow default imports from CommonJS modules (needed for compatibility)
+    "esModuleInterop": true,
+    // Enforce that file names must match case on import and file system
+    "forceConsistentCasingInFileNames": true,
+    // Allow importing `.json` files as modules (useful for configs, data)
+    "resolveJsonModule": true,
+    // Disallow imports with `.ts` or `.js` file extensions — forces clean paths
+    "allowImportingTsExtensions": false,
+    // Skip type checking for .d.ts files
+    "skipLibCheck": true,
+    // Base path for non-relative imports (used with "paths")
+    "baseUrl": ".",
+    // Output all compiled JS here
+    // E.g., import from 'utils/xyz' instead of './utils/xyz'
+    "paths": {
+      "*": ["*"]
+    }
+  },
+  // Files and folders to include in the compilation
+  "include": ["**/*.ts"]
+}

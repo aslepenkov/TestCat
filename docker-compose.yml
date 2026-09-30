@@ -1,0 +1,95 @@
+services:
+  testcatai-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    container_name: testcatai-agent
+    volumes:
+      - ./prompt:/app/prompt:ro
+      - ./input:/app/input:ro
+      - ./output:/app/output:rw
+      - ./logs:/app/logs:rw
+    environment:
+      - NODE_ENV=production
+      - DATA_DIR=/app/input
+      - OUTPUT_DIR=/app/output
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+    restart: unless-stopped
+    command: ["tail", "-f", "/dev/null"] # Keep container running for manual agent usage
+    networks:
+      - testcatai-network
+
+  testcatai-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: testcatai-backend
+    ports:
+      - "3000:3000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./prompt:/app/prompt:ro
+      - ./input:/app/input:ro
+      - ./output:/app/output:rw
+      - ./logs:/app/logs:rw
+      - analysis-data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - CORS_ORIGIN=http://localhost:8080
+      - WORKSPACE_DIR=/app/input
+      - OUTPUT_DIR=/app/output
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - testcatai-network
+
+  testcatai-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: testcatai-frontend
+    ports:
+      - "8080:80"
+    environment:
+      - BACKEND_URL=http://testcatai-backend:3000
+    depends_on:
+      testcatai-backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:80/",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - testcatai-network
+
+volumes:
+  analysis-data:
+    driver: local
+
+networks:
+  testcatai-network:
+    driver: bridge

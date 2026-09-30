@@ -1,0 +1,28 @@
+{
+  "name": "testcatai-agent-service",
+  "version": "1.0.0",
+  "description": "TestCatAI Agent Service - AI-powered code analysis with CLI",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "build": "node esbuild.config.js",
+    "start": "node dist/index.js",
+    "dev": "tsx index.ts",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@vscode/copilot-api": "^0.1.1",
+    "commander": "^14.0.0",
+    "dotenv": "^16.3.0",
+    "fs-extra": "^11.2.0",
+    "moment": "^2.30.1",
+    "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^20.11.0",
+    "esbuild": "^0.25.8",
+    "tsx": "^4.0.0",
+    "typescript": "^5.3.0"
+  }
+}
